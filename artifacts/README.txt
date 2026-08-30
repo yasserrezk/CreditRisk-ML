@@ -1,0 +1,1 @@
+This folder is dedicated to saving trained model binaries and preprocessors with extensions like .pkl or .joblib (e.g., credit_model.pkl).
