@@ -1,3 +1,5 @@
+from time import time
+
 import pandas as pd
 from pathlib import Path
 
@@ -31,6 +33,30 @@ def load_raw_data():
         print(f"Error: File not found. Please check the paths.\n{e}")
         return None, None
 
+processed_train_path = project_root / 'data' / 'processed' / 'processed_train.csv'
+processed_test_path = project_root / 'data' / 'processed' / 'processed_test.csv'
+
+def load_processed_data():
+    """
+    Loads the processed training and testing datasets from the data/processed directory.
+    
+    Returns:
+        tuple: (processed_train, processed_test) as pandas DataFrames.
+    """
+    print(f"Loading training data from: {processed_train_path}")
+    print(f"Loading testing data from: {processed_test_path}")
+    
+    # Load the CSV files into pandas DataFrames
+    try:
+        processed_train = pd.read_csv(processed_train_path)
+        processed_test = pd.read_csv(processed_test_path)
+        print("Data loaded successfully!\n")
+        return processed_train, processed_test
+        
+    except FileNotFoundError as e:
+        print(f"Error: File not found. Please check the paths.\n{e}")
+        return None, None
+ 
 if __name__ == "__main__":
     # Execute the function and unpack the returned DataFrames
     train_df, test_df = load_raw_data()
@@ -39,3 +65,11 @@ if __name__ == "__main__":
         # Display basic information to verify successful loading
         print(f"Training data shape: {train_df.shape}")
         print(f"Testing data shape: {test_df.shape}")
+
+    # Execute the function and unpack the returned DataFrames
+    processed_train_df, processed_test_df = load_processed_data()
+
+    if processed_train_df is not None and processed_test_df is not None:
+        # Display basic information to verify successful loading
+        print(f"Processed training data shape: {processed_train_df.shape}")
+        print(f"Processed testing data shape: {processed_test_df.shape}")
