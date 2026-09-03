@@ -1,0 +1,4 @@
+model,accuracy,precision,recall,f1,roc_auc
+XGBoost,0.943,0.5878,0.128,0.2102,0.863
+Logistic Regression,0.7955,0.189,0.7446,0.3015,0.854
+SVM,0.9407,0.0,0.0,0.0,0.6067

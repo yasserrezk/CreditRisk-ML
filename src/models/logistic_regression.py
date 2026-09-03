@@ -35,6 +35,6 @@ def build_search_estimator(random_state):
 def get_param_dist():
     return {
         "clf__C": np.logspace(-3, 2, 20),
-        "clf__penalty": ["l1", "l2"],
+        "clf__l1_ratio": [0.5, 0.7, 0.9],
         "clf__solver": ["liblinear", "saga"],
     }
