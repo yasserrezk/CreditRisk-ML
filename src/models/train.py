@@ -1,8 +1,9 @@
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
-from src.models.model import svm_model, xgboost_model,logistic_regression
+from src.models.model import logistic_regression, svm_model, xgboost_model
 from src.models.config import (
     ARTIFACTS_DIR,
     BEST_MODEL_JOBLIB_PATH,
@@ -11,7 +12,6 @@ from src.models.config import (
     DROP_COLS,
     RANDOM_STATE,
     SUBMISSION_CSV_PATH,
-    SVM_MAX_TRAIN_ROWS,
     TEST_PATH,
     TRAIN_PATH,
 )
@@ -24,43 +24,55 @@ from src.models.data_loader import (
 )
 
 from src.models.evaluation import evaluate_model
-from models.model import logistic_regression
 from src.models.tuning import make_cv, tune
 
 MODELS_DIR = ARTIFACTS_DIR / "models"
 EVAL_BUNDLE_PATH = ARTIFACTS_DIR / "eval_bundle.joblib"
 
 
-def _get_coef(est):
-    """Safely get coef_ from an estimator or a Pipeline-like object.
-    This avoids direct attribute access on BaseEstimator subclasses
-    that may not expose 'named_steps' to static analyzers.
-    """
+def _unwrap_estimator(est):
+    """Return the underlying estimator for pipeline-like or wrapper objects."""
+    clf = est
     if hasattr(est, "named_steps"):
         clf = est.named_steps.get("clf", est)
     elif hasattr(est, "clf"):
         clf = getattr(est, "clf")
-    else:
-        clf = est
-    return clf.coef_[0]
+
+    if hasattr(clf, "estimator"):
+        clf = clf.estimator
+    if hasattr(clf, "calibrated_classifiers_") and clf.calibrated_classifiers_:
+        clf = clf.calibrated_classifiers_[0].estimator
+    return clf
+
+
+def _get_coef(est):
+    """Safely get coef_ from an estimator or a Pipeline-like object."""
+    clf = _unwrap_estimator(est)
+    if hasattr(clf, "coef_"):
+        return clf.coef_[0]
+    raise AttributeError(f"Estimator {type(clf).__name__} has no coef_")
 
 
 def _get_feature_importances(est):
     """Safely get feature_importances_ from an estimator or Pipeline-like object.
     Falls back to coef_ if feature_importances_ is not present.
     """
-    if hasattr(est, "named_steps"):
-        clf = est.named_steps.get("clf", est)
-    elif hasattr(est, "clf"):
-        clf = getattr(est, "clf")
-    else:
-        clf = est
+    clf = _unwrap_estimator(est)
 
     if hasattr(clf, "feature_importances_"):
         return clf.feature_importances_
     if hasattr(clf, "coef_"):
         return clf.coef_[0]
     raise AttributeError("Estimator has no feature_importances_ or coef_")
+
+
+def _safe_feature_importance_series(est, feature_names):
+    """Return feature importances or a zero vector when the estimator has none."""
+    try:
+        values = _get_feature_importances(est)
+    except AttributeError:
+        values = np.zeros(len(feature_names))
+    return pd.Series(values, index=feature_names).sort_values()
 
 
 def _get_model_path(name):
@@ -224,14 +236,18 @@ def main():
 
     svm_classifier = _load_model("SVM")
 
+    std = StandardScaler()
+    X_train_scaled = std.fit_transform(X_train[:80000], y_train[:80000])
+    X_test_scaled = std.transform(X_test)
+
     if svm_classifier is None:
         print("Training SVM baseline...")
 
         svm_classifier = svm_model.build_baseline(RANDOM_STATE)
 
         svm_classifier.fit(
-            X_train,
-            y_train,
+            X_train_scaled,
+            y_train[:80000],
         )
 
         _save_model("SVM", svm_classifier)
@@ -239,7 +255,7 @@ def main():
     svm_metrics, svm_proba = evaluate_model(
         "SVM",
         svm_classifier,
-        X_test,
+        X_test_scaled,
         y_test,
         verbose=False,
     )
@@ -275,14 +291,8 @@ def main():
             _get_coef(best_logreg),
             index=feature_names,
         ).sort_values(),
-        "XGBoost": pd.Series(
-            _get_feature_importances(best_xgb),
-            index=feature_names,
-        ).sort_values(),
-        "SVM": pd.Series(
-            best_model.named_steps["clf"].coef_[0],
-            index=feature_names,
-        ).sort_values(),
+        "XGBoost": _safe_feature_importance_series(best_xgb, feature_names),
+        "SVM": _safe_feature_importance_series(fitted_models["SVM"], feature_names),
     }
 
     # ============================================================
