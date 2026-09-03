@@ -1,154 +1,103 @@
 # CreditRisk-ML
 
-CreditRisk-ML is a credit-risk data preparation and exploratory analysis project
-based on the Give Me Some Credit dataset. It prepares raw borrower records for
-downstream modeling by cleaning invalid values, engineering debt-related
-features, and imputing missing values without fitting on the test set.
+CreditRisk-ML prepares and analyzes credit-risk data from the "Give Me Some
+Credit" dataset. The project focuses on safe, reproducible preprocessing for
+downstream modeling: cleaning invalid entries, engineering debt-related
+features, and imputing missing values using models fit only on training data.
 
-## Project status
+## Quickstart
 
-The repository currently contains:
+1. Create and activate a Python environment (recommended):
 
-- Raw and processed training/test CSV files.
-- A reusable data-loading module.
-- Cleaning, feature-engineering, and smart-imputation pipelines.
-- Jupyter notebooks for data understanding and exploratory analysis.
-- A Power BI dashboard and exported screenshots.
-
-The `src/models`, `src/api`, `configs`, `tests`, and `artifacts` directories are
-documented extension points. Their README files describe the intended contents,
-but implementation files are not currently included.
-
-## Repository structure
-
-```text
-CreditRisk-ML/
-├── README.md
-├── .gitignore
-├── data/
-│   ├── raw/
-│   │   ├── README.txt
-│   │   ├── training.csv              # Training records and target column
-│   │   ├── test.csv                  # Test records without target values
-│   │   └── testsampleweight.csv      # Test-row sample weights
-│   └── processed/
-│       ├── README.txt
-│       ├── processed_train.csv       # Cleaned and engineered training data
-│       └── processed_test.csv        # Cleaned and engineered test data
-├── src/
-│   ├── api/
-│   │   └── README.txt                # Planned FastAPI serving layer
-│   ├── data/
-│   │   ├── README.txt
-│   │   ├── data_cleaning/
-│   │   │   ├── clean_data.py         # Dataset-level processing entry point
-│   │   │   └── data_cleaning_pipeline.py
-│   │   ├── data_fetching/
-│   │   │   └── load_data.py          # Raw and processed CSV loaders
-│   │   └── data_understanding/
-│   │       ├── data_understanding.ipynb
-│   │       └── data_processed_understanding.ipynb
-│   ├── features/
-│   │   ├── README.txt
-│   │   ├── feature_engineering.py    # MonthlyDebt and NonRealEstateLoans
-│   │   └── smart_imputation.py        # Iterative random-forest imputation
-│   └── models/
-│       └── README.txt                # Planned training and evaluation layer
-├── notebooks/
-│   ├── README.txt
-│   └── EDA.ipynb                     # Exploratory data analysis
-├── dashboard/
-│   ├── README.txt
-│   ├── Credit_Risk_Analysis.pbix
-│   └── Screenshot *.png
-├── configs/
-│   └── README.txt                    # Planned YAML/JSON configuration files
-├── tests/
-│   └── README.txt                    # Planned pytest test suite
-└── artifacts/
-    └── README.txt                    # Planned serialized models and preprocessors
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Generated Python cache files such as `__pycache__/` and `*.pyc` are excluded by
-`.gitignore`.
-
-## Data pipeline
-
-Run the complete preparation workflow from the repository root:
+2. Run the end-to-end preprocessing pipeline from the repository root:
 
 ```bash
 python src/data/data_cleaning/clean_data.py
 ```
 
-The workflow:
+Outputs are written to `data/processed/processed_train.csv` and
+`data/processed/processed_test.csv`.
 
-1. Loads `data/raw/training.csv` and `data/raw/test.csv`.
-2. Renames `Unnamed: 0` to `Id` when necessary.
-3. Removes duplicate training rows (excluding the ID).
-4. Removes invalid training values and clips corresponding test values:
-   - age below 21;
-   - revolving utilization above 1;
-   - delinquency counts above 20.
-5. Creates `MonthlyDebt` from `DebtRatio` and `MonthlyIncome`, then removes
+## What this repo contains
+
+- Raw and processed CSV datasets under `data/`.
+- Reusable data loading utilities in `src/data/data_fetching`.
+- Deterministic cleaning, feature-engineering, and imputation code in
+  `src/data/data_cleaning`, `src/features`, and `src/data/data_cleaning`.
+- Notebooks for exploration in `notebooks/` and `src/data/data_understanding`.
+- A Power BI dashboard snapshot in `dashboard/` and example artifacts under
+  `artifacts/` (serialized models and exports).
+
+## Repository layout (high level)
+
+CreditRisk-ML/
+- data/
+  - raw/              # Source CSVs (do not modify)
+  - processed/        # Generated outputs from the pipeline
+- src/
+  - data/
+    - data_cleaning/      # `clean_data.py`, pipeline entrypoint
+    - data_fetching/      # CSV loaders
+    - data_understanding/ # analysis notebooks
+  - features/             # `feature_engineering.py`, `smart_imputation.py`
+  - models/               # model training & evaluation (planned)
+- notebooks/             # EDA and analysis notebooks
+- dashboard/             # Power BI file + screenshots
+- configs/               # Configuration templates (planned)
+- tests/                 # Tests (planned)
+- artifacts/             # Saved models and evaluation bundles
+
+## Data pipeline (summary)
+
+The preprocessing script implements these steps:
+
+1. Load raw CSVs from `data/raw/`.
+2. Normalize ID column and remove exact duplicate training rows.
+3. Apply business-rule validation and clip implausible test values (age,
+   utilization, delinquency counts).
+4. Derive `MonthlyDebt` from `DebtRatio` and `MonthlyIncome`, then remove
    `DebtRatio`.
-6. Fits one `IterativeImputer` with a `RandomForestRegressor` on training data.
-7. Uses that same fitted imputer for test data to prevent data leakage.
-8. Creates `NonRealEstateLoans` and clips negative results to zero.
-9. Writes `data/processed/processed_train.csv` and
-   `data/processed/processed_test.csv`.
+5. Fit an `IterativeImputer` (with `RandomForestRegressor`) on training data
+   and reuse the fitted imputer for test rows to avoid data leakage.
+6. Derive `NonRealEstateLoans` and enforce non-negative constraints.
+7. Save processed outputs to `data/processed/`.
 
-The script locates the project root by searching upward for the `src`
-directory, so it should be run from the repository or a child directory.
+Run the pipeline from the repository root (the script resolves the root by
+searching upward for the `src` directory).
 
-## Data columns
+## Important files and modules
 
-The raw datasets use the following fields:
+- `src/data/data_cleaning/clean_data.py` — pipeline orchestration and I/O.
+- `src/data/data_cleaning/data_cleaning_pipeline.py` — normalization and
+  validation rules.
+- `src/features/feature_engineering.py` — `MonthlyDebt` and derived fields.
+- `src/features/smart_imputation.py` — iterative random-forest imputation.
+- `src/data/data_fetching/load_data.py` — CSV loaders for raw/processed.
 
-| Column | Description |
-| --- | --- |
-| `Id` | Borrower identifier |
-| `SeriousDlqin2yrs` | Target: serious delinquency within two years (training data only) |
-| `RevolvingUtilizationOfUnsecuredLines` | Unsecured revolving credit utilization |
-| `age` | Borrower age |
-| `NumberOfTime30-59DaysPastDueNotWorse` | 30–59 day delinquency count |
-| `DebtRatio` | Raw debt-to-income ratio, replaced during processing |
-| `MonthlyIncome` | Monthly income |
-| `NumberOfOpenCreditLinesAndLoans` | Open credit lines and loans |
-| `NumberOfTimes90DaysLate` | 90+ day delinquency count |
-| `NumberRealEstateLoansOrLines` | Real-estate-backed loans or lines |
-| `NumberOfTime60-89DaysPastDueNotWorse` | 60–89 day delinquency count |
-| `NumberOfDependents` | Number of dependents |
+## Notes for contributors
 
-Processed files replace `DebtRatio` with `MonthlyDebt` and add
-`NonRealEstateLoans`. The processed test file retains an empty
-`SeriousDlqin2yrs` column because the source test data has no labels.
+- Do not edit files in `data/raw/`; they are the canonical source data.
+- Refit the imputer only on training data; reuse it for test rows to avoid
+  leakage.
+- Regenerate `data/processed/` whenever cleaning or feature logic changes.
+- Add unit tests under `tests/` when new processing behavior is introduced.
 
-## Python modules
+## Dependencies
 
-- `load_data.py`: loads raw or processed CSV files into pandas DataFrames.
-- `data_cleaning_pipeline.py`: normalizes IDs, handles duplicates, and applies
-  business-rule validation.
-- `feature_engineering.py`: derives absolute monthly debt and non-real-estate
-  credit lines.
-- `smart_imputation.py`: imputes selected numeric fields with an iterative
-  random-forest estimator and enforces non-negative business constraints.
-- `clean_data.py`: orchestrates the complete train/test workflow and saves
-  outputs.
+Create a virtual environment and install the common dependencies listed in
+`requirements.txt` (pandas, numpy, scikit-learn, jupyter). If `requirements.txt`
+is missing, I can generate one from the codebase.
 
-## Analysis and dashboard
+## Next steps I can help with
 
-- Use [`notebooks/EDA.ipynb`](notebooks/EDA.ipynb) for exploratory analysis.
-- Use the notebooks under
-  [`src/data/data_understanding/`](src/data/data_understanding/) to inspect raw
-  and processed data.
-- Open `dashboard/Credit_Risk_Analysis.pbix` with Power BI Desktop to explore
-  the included dashboard. The PNG files in the same directory are snapshots.
+- Add `requirements.txt` and a lightweight `Makefile` or CLI wrapper.
+- Add a `tests/` smoke test that runs the pipeline and verifies outputs.
+- Scaffold a model training script and evaluation workflow.
 
-## Development notes
-
-- Do not modify files in `data/raw/`; they are the source datasets.
-- Regenerate processed files after changing cleaning or feature-engineering
-  logic.
-- Keep the imputer fit on training data only and reuse it for test data.
-- Install the project dependencies in your Python environment before running
-  the pipeline: pandas, NumPy, scikit-learn, and Jupyter for notebooks.
+If you want one of these next steps, tell me which and I'll implement it.
