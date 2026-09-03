@@ -1,9 +1,7 @@
 """Credit Risk – Model Training, Tuning & Evaluation pipeline.
 
-Trains all four models, tunes the three that support it (Logistic
-Regression, LightGBM, XGBoost — SVM is left at a sensible baseline),
-picks the best model by test-set ROC-AUC, scores the held-out real test
-set, and writes everything the Streamlit dashboard needs to /artifacts.
+Trains four models and saves each fitted model immediately.
+On re-run, an existing saved model is loaded instead of retraining it.
 
 Run from the project root:
     python -m src.models.train
@@ -43,7 +41,7 @@ EVAL_BUNDLE_PATH = ARTIFACTS_DIR / "eval_bundle.joblib"
 
 
 def _subsample_for_svm(X_train, y_train, max_rows, random_state):
-    """Stratified subsample so kernel SVM training stays fast on large data."""
+    """Stratified subsample so kernel SVM training stays fast."""
     if max_rows is None or len(X_train) <= max_rows:
         return X_train, y_train
 
@@ -58,11 +56,34 @@ def _subsample_for_svm(X_train, y_train, max_rows, random_state):
 
     print(
         f"SVM: subsampling training set from {len(X_train)} "
-        f"to {len(X_sub)} rows "
-        f"(see SVM_MAX_TRAIN_ROWS in config.py)."
+        f"to {len(X_sub)} rows."
     )
 
     return X_sub, y_sub
+
+
+def _get_model_path(name):
+    """Return the saved path for a model."""
+    safe_name = name.lower().replace(" ", "_")
+    return MODELS_DIR / f"{safe_name}.joblib"
+
+
+def _save_model(name, model):
+    """Save a fitted model."""
+    model_path = _get_model_path(name)
+    joblib.dump(model, model_path)
+    print(f"{name} saved to: {model_path}")
+
+
+def _load_model(name):
+    """Load a previously saved model."""
+    model_path = _get_model_path(name)
+
+    if model_path.exists():
+        print(f"{name} already exists. Loading: {model_path}")
+        return joblib.load(model_path)
+
+    return None
 
 
 def main():
@@ -91,34 +112,43 @@ def main():
     cv = make_cv()
 
     # ============================================================
-    # 2) Logistic Regression — baseline + tuned
+    # 2) Logistic Regression
     # ============================================================
-    print("\n===== Train + tune Logistic Regression =====")
+    print("\n===== Logistic Regression =====")
 
-    logreg_pipe = logistic_regression.build_baseline(RANDOM_STATE)
+    best_logreg = _load_model("Logistic Regression")
 
-    logreg_pipe.fit(X_train, y_train)
+    if best_logreg is None:
+        print("Training Logistic Regression baseline...")
 
-    evaluate_model(
-        "Logistic Regression (baseline)",
-        logreg_pipe,
-        X_test,
-        y_test,
-        verbose=False,
-    )
+        logreg_pipe = logistic_regression.build_baseline(RANDOM_STATE)
 
-    search_lr = tune(
-        logistic_regression.build_search_estimator(RANDOM_STATE),
-        logistic_regression.get_param_dist(),
-        X_train,
-        y_train,
-        cv,
-        n_iter=20,
-    )
+        logreg_pipe.fit(X_train, y_train)
 
-    print("Best params (LR):", search_lr.best_params_)
+        evaluate_model(
+            "Logistic Regression (baseline)",
+            logreg_pipe,
+            X_test,
+            y_test,
+            verbose=False,
+        )
 
-    best_logreg = search_lr.best_estimator_
+        print("Tuning Logistic Regression...")
+
+        search_lr = tune(
+            logistic_regression.build_search_estimator(RANDOM_STATE),
+            logistic_regression.get_param_dist(),
+            X_train,
+            y_train,
+            cv,
+            n_iter=20,
+        )
+
+        print("Best params (LR):", search_lr.best_params_)
+
+        best_logreg = search_lr.best_estimator_
+
+        _save_model("Logistic Regression", best_logreg)
 
     lr_metrics, lr_proba = evaluate_model(
         "Logistic Regression",
@@ -133,37 +163,46 @@ def main():
     proba_map["Logistic Regression"] = lr_proba
 
     # ============================================================
-    # 3) XGBoost — baseline + tuned
+    # 3) XGBoost
     # ============================================================
-    print("\n===== Train + tune XGBoost =====")
+    print("\n===== XGBoost =====")
 
-    xgb_baseline = xgboost_model.build_baseline(
-        RANDOM_STATE,
-        y_train,
-    )
+    best_xgb = _load_model("XGBoost")
 
-    xgb_baseline.fit(X_train, y_train)
+    if best_xgb is None:
+        print("Training XGBoost baseline...")
 
-    evaluate_model(
-        "XGBoost (baseline)",
-        xgb_baseline,
-        X_test,
-        y_test,
-        verbose=False,
-    )
+        xgb_baseline = xgboost_model.build_baseline(
+            RANDOM_STATE,
+            y_train,
+        )
 
-    search_xgb = tune(
-        xgboost_model.build_search_estimator(RANDOM_STATE),
-        xgboost_model.get_param_dist(y_train),
-        X_train,
-        y_train,
-        cv,
-        n_iter=25,
-    )
+        xgb_baseline.fit(X_train, y_train)
 
-    print("Best params (XGBoost):", search_xgb.best_params_)
+        evaluate_model(
+            "XGBoost (baseline)",
+            xgb_baseline,
+            X_test,
+            y_test,
+            verbose=False,
+        )
 
-    best_xgb = search_xgb.best_estimator_
+        print("Tuning XGBoost...")
+
+        search_xgb = tune(
+            xgboost_model.build_search_estimator(RANDOM_STATE),
+            xgboost_model.get_param_dist(y_train),
+            X_train,
+            y_train,
+            cv,
+            n_iter=15,
+        )
+
+        print("Best params (XGBoost):", search_xgb.best_params_)
+
+        best_xgb = search_xgb.best_estimator_
+
+        _save_model("XGBoost", best_xgb)
 
     xgb_metrics, xgb_proba = evaluate_model(
         "XGBoost",
@@ -178,14 +217,30 @@ def main():
     proba_map["XGBoost"] = xgb_proba
 
     # ============================================================
-    # 4) SVM — baseline only
+    # 4) SVM
     # ============================================================
-    print("\n===== Train SVM (baseline only) =====")
+    print("\n===== SVM =====")
 
+    svm_classifier = _load_model("SVM")
 
-    svm_classifier = svm_model.build_baseline(RANDOM_STATE)
+    if svm_classifier is None:
+        print("Training SVM baseline...")
 
-    svm_classifier.fit(X_train, y_train)
+        X_train_svm, y_train_svm = _subsample_for_svm(
+            X_train,
+            y_train,
+            SVM_MAX_TRAIN_ROWS,
+            RANDOM_STATE,
+        )
+
+        svm_classifier = svm_model.build_baseline(RANDOM_STATE)
+
+        svm_classifier.fit(
+            X_train_svm,
+            y_train_svm,
+        )
+
+        _save_model("SVM", svm_classifier)
 
     svm_metrics, svm_proba = evaluate_model(
         "SVM",
@@ -200,7 +255,7 @@ def main():
     proba_map["SVM"] = svm_proba
 
     # ============================================================
-    # 5) Compare all models
+    # 5) Compare models
     # ============================================================
     comparison_df = (
         pd.DataFrame(list(results_store.values()))
@@ -233,15 +288,8 @@ def main():
     }
 
     # ============================================================
-    # 7) Save fitted models + best model + comparison
+    # 7) Save best model
     # ============================================================
-    for name, model in fitted_models.items():
-        safe_name = name.lower().replace(" ", "_")
-        joblib.dump(
-            model,
-            MODELS_DIR / f"{safe_name}.joblib",
-        )
-
     joblib.dump(best_model, BEST_MODEL_PKL_PATH)
     joblib.dump(best_model, BEST_MODEL_JOBLIB_PATH)
 
@@ -250,7 +298,7 @@ def main():
     print(f"Best model saved to: {BEST_MODEL_PKL_PATH}")
 
     # ============================================================
-    # 8) Save evaluation bundle for dashboard
+    # 8) Save evaluation bundle
     # ============================================================
     eval_bundle = {
         "y_test": y_test.to_numpy(),
