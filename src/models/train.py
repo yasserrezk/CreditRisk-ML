@@ -1,16 +1,8 @@
-"""Credit Risk – Model Training, Tuning & Evaluation pipeline.
-
-Trains four models and saves each fitted model immediately.
-On re-run, an existing saved model is loaded instead of retraining it.
-
-Run from the project root:
-    python -m src.models.train
-"""
-
 import joblib
 import numpy as np
 import pandas as pd
 
+from src.models.model import svm_model, xgboost_model,logistic_regression
 from src.models.config import (
     ARTIFACTS_DIR,
     BEST_MODEL_JOBLIB_PATH,
@@ -32,34 +24,43 @@ from src.models.data_loader import (
 )
 
 from src.models.evaluation import evaluate_model
-from src.models import logistic_regression, svm_model, xgboost_model
+from models.model import logistic_regression
 from src.models.tuning import make_cv, tune
-
 
 MODELS_DIR = ARTIFACTS_DIR / "models"
 EVAL_BUNDLE_PATH = ARTIFACTS_DIR / "eval_bundle.joblib"
 
 
-def _subsample_for_svm(X_train, y_train, max_rows, random_state):
-    """Stratified subsample so kernel SVM training stays fast."""
-    if max_rows is None or len(X_train) <= max_rows:
-        return X_train, y_train
+def _get_coef(est):
+    """Safely get coef_ from an estimator or a Pipeline-like object.
+    This avoids direct attribute access on BaseEstimator subclasses
+    that may not expose 'named_steps' to static analyzers.
+    """
+    if hasattr(est, "named_steps"):
+        clf = est.named_steps.get("clf", est)
+    elif hasattr(est, "clf"):
+        clf = getattr(est, "clf")
+    else:
+        clf = est
+    return clf.coef_[0]
 
-    frac = max_rows / len(X_train)
 
-    X_sub, _, y_sub, _ = train_test_split_data(
-        X_train,
-        y_train,
-        test_size=1 - frac,
-        random_state=random_state,
-    )
+def _get_feature_importances(est):
+    """Safely get feature_importances_ from an estimator or Pipeline-like object.
+    Falls back to coef_ if feature_importances_ is not present.
+    """
+    if hasattr(est, "named_steps"):
+        clf = est.named_steps.get("clf", est)
+    elif hasattr(est, "clf"):
+        clf = getattr(est, "clf")
+    else:
+        clf = est
 
-    print(
-        f"SVM: subsampling training set from {len(X_train)} "
-        f"to {len(X_sub)} rows."
-    )
-
-    return X_sub, y_sub
+    if hasattr(clf, "feature_importances_"):
+        return clf.feature_importances_
+    if hasattr(clf, "coef_"):
+        return clf.coef_[0]
+    raise AttributeError("Estimator has no feature_importances_ or coef_")
 
 
 def _get_model_path(name):
@@ -226,18 +227,11 @@ def main():
     if svm_classifier is None:
         print("Training SVM baseline...")
 
-        X_train_svm, y_train_svm = _subsample_for_svm(
-            X_train,
-            y_train,
-            SVM_MAX_TRAIN_ROWS,
-            RANDOM_STATE,
-        )
-
         svm_classifier = svm_model.build_baseline(RANDOM_STATE)
 
         svm_classifier.fit(
-            X_train_svm,
-            y_train_svm,
+            X_train,
+            y_train,
         )
 
         _save_model("SVM", svm_classifier)
@@ -275,14 +269,18 @@ def main():
     # ============================================================
     # 6) Feature importance / coefficients
     # ============================================================
+
     importances = {
         "Logistic Regression": pd.Series(
-            best_logreg.named_steps["clf"].coef_[0],
+            _get_coef(best_logreg),
             index=feature_names,
         ).sort_values(),
-
         "XGBoost": pd.Series(
-            best_xgb.feature_importances_,
+            _get_feature_importances(best_xgb),
+            index=feature_names,
+        ).sort_values(),
+        "SVM": pd.Series(
+            best_model.named_steps["clf"].coef_[0],
             index=feature_names,
         ).sort_values(),
     }
@@ -322,10 +320,7 @@ def main():
     df_test_real = load_test_real(TEST_PATH)
 
     X_test_real = df_test_real.drop(
-        columns=[
-            c for c in DROP_COLS
-            if c in df_test_real.columns
-        ]
+        columns=[c for c in DROP_COLS if c in df_test_real.columns]
     )
 
     assert list(X_test_real.columns) == feature_names
@@ -354,9 +349,7 @@ def main():
         round(submission["predicted_class"].mean(), 4),
     )
 
-    print(
-        f"Predictions saved to: {SUBMISSION_CSV_PATH}"
-    )
+    print(f"Predictions saved to: {SUBMISSION_CSV_PATH}")
 
 
 if __name__ == "__main__":
