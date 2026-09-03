@@ -1,1 +1,0 @@
-This folder houses the FastAPI backend application layer (main.py, schemas.py, services.py) for real-time model serving.

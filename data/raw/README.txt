@@ -1,1 +1,0 @@
-This folder contains immutable, original data files (e.g., train.csv downloaded directly from Kaggle). Do not modify files in this directory.

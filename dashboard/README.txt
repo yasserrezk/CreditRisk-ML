@@ -1,1 +1,0 @@
-This folder contains the Streamlit interactive web user interface (app.py) for visual testing and client interaction.

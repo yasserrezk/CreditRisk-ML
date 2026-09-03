@@ -1,1 +1,0 @@
-This folder is for Jupyter Notebooks used for Exploratory Data Analysis (EDA), prototyping, and visualizing feature correlations.

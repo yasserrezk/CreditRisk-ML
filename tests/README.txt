@@ -1,1 +1,0 @@
-This folder holds automated test suites (using pytest) to validate API endpoints, request schemas, and model output consistency.
