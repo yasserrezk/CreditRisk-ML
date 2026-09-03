@@ -182,16 +182,10 @@ def main():
     # ============================================================
     print("\n===== Train SVM (baseline only) =====")
 
-    X_train_svm, y_train_svm = _subsample_for_svm(
-        X_train,
-        y_train,
-        SVM_MAX_TRAIN_ROWS,
-        RANDOM_STATE,
-    )
 
     svm_classifier = svm_model.build_baseline(RANDOM_STATE)
 
-    svm_classifier.fit(X_train_svm, y_train_svm)
+    svm_classifier.fit(X_train, y_train)
 
     svm_metrics, svm_proba = evaluate_model(
         "SVM",
