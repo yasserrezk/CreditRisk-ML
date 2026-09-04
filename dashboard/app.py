@@ -30,7 +30,7 @@ from sklearn.metrics import (
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.models.config import (  # noqa: E402
+from configs.config import (  # noqa: E402
     ARTIFACTS_DIR,
     COMPARISON_CSV_PATH,
     SUBMISSION_CSV_PATH,
