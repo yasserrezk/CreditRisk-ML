@@ -3,8 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from src.models.model import logistic_regression, svm_model, xgboost_model
-from src.models.config import (
+from configs.config import (
     ARTIFACTS_DIR,
     BEST_MODEL_JOBLIB_PATH,
     BEST_MODEL_PKL_PATH,
@@ -15,6 +14,9 @@ from src.models.config import (
     TEST_PATH,
     TRAIN_PATH,
 )
+
+from src.models.model import logistic_regression, svm_model, xgboost_model
+
 
 from src.models.data_loader import (
     load_test_real,

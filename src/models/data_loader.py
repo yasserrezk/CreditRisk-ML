@@ -2,7 +2,7 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from src.models.config import DROP_COLS, RANDOM_STATE, TARGET, TEST_PATH, TRAIN_PATH
+from configs.config import DROP_COLS, RANDOM_STATE, TARGET, TEST_PATH, TRAIN_PATH
 
 
 def load_train_full(path=TRAIN_PATH):

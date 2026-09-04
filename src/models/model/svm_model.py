@@ -7,15 +7,15 @@ NAME = "SVM"
 
 def build_baseline(random_state):
     return CalibratedClassifierCV(
-        SVC(class_weight="balanced", random_state=random_state, verbose=True),
-        n_jobs=-1
+        SVC(class_weight="balanced",kernel='rbf',C=1.0,gamma='scale', random_state=random_state, verbose=True),
+        n_jobs=-1,
     )
 
 
 def build_search_estimator(random_state):
     return CalibratedClassifierCV(
-        SVC(class_weight="balanced", random_state=random_state, verbose=True),
-        n_jobs=-1
+        SVC(class_weight="balanced",kernel='rbf',C=1.0,gamma='scale', random_state=random_state, verbose=True),
+        n_jobs=-1,
     )
 
 

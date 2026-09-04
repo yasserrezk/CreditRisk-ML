@@ -1,7 +1,7 @@
 """Generic RandomizedSearchCV wrapper used to tune every model the same way."""
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 
-from src.models.config import CV_N_SPLITS, RANDOM_STATE
+from configs.config import CV_N_SPLITS, RANDOM_STATE
 
 
 def make_cv(n_splits=CV_N_SPLITS, random_state=RANDOM_STATE):
